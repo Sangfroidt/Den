@@ -17,16 +17,13 @@
 
 <div id="content">
     <div class="center-block">
-        <div id="banner">
-            <h1 n:block=title>Nette Ajax example!</h1>
-        </div>
         {snippet click-counter}
             <div class="counter">{$clickCounter}</div>
             <div class="counter-message">{$counterMessage}</div>
         {/snippet}
-        <a class="ajax btn" n:href="clickMe!">Click me!</a>
+        <a class="ajax btn" n:href="UpvoteMe!">+ Upvote</a>
+        <a class="ajax btn" n:href="DownvoteMe!">- Downvote</a>
     </div>
-
 </div>
 
 <h2>Comments</h2>

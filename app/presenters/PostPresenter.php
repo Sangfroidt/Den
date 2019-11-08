@@ -15,6 +15,7 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 	private $postManager;
 	public $counterMessage;
 	public $karma;
+	public $postId;
 
 
 	public function __construct(Model\PostManager $postManager)
@@ -27,6 +28,7 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 	{
 		//vytáhne z databáze post
 		$post = $this->postManager->findById($postId);
+		$this->postId = $postId;
 
 		if (!$post) {
 			$this->error('Post not found');
@@ -47,6 +49,7 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 		$this->template->counterMessage = $this->counterMessage;
 		$this->template->clickCounter = "xaaldaa";
 		$this->template->karma = $this->karma;
+
 	}
 
 
@@ -72,6 +75,7 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 	//komentáře
 	protected function createComponentCommentForm(): Form
 	{
+		$postId = $this->getParameter('postId');
 		$form = new Form;
 		$form->addText('name', 'Your name:')
 			->setRequired();
@@ -81,6 +85,8 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 		$form->addTextArea('content', 'Comment:')
 			->setRequired();
 
+		$form->addHidden('post_id')->setDefaultValue($postId);	
+
 		$form->addSubmit('send', 'Publish comment');
 		$form->onSuccess[] = [$this, 'commentFormSucceeded'];
 
@@ -88,15 +94,9 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 	}
 
 	
-	public function commentFormSucceeded(Form $form, \stdClass $values): void
+	public function commentFormSucceeded(Form $form, array $values): void
 	{
-		$this->database->table('comments')->insert([
-			'post_id' => $this->getParameter('postId'),
-			'name' => $values->name,
-			'email' => $values->email,
-			'content' => $values->content,
-		]);
-
+		$this->postManager->koment($values);
 		$this->flashMessage('Thank you for your comment', 'success');
 		$this->redirect('this');
 	}
@@ -107,7 +107,7 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 		if (!$this->getUser()->isLoggedIn()) {
 			$this->redirect('Sign:in');
 		}
-		dump($this->getUser()->getIdentity()->getRoles()['id']);
+
 	}
 
 	//načtení Post/Edit.latte
@@ -116,7 +116,7 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 		if (!$this->getUser()->isLoggedIn()) {
 			$this->redirect('Sign:in');
 		}
-
+		else{
 		$post = $this->postManager->findById($postId);
 		$postInfo = $this->postManager->findbyWhere('id', $postId);
 
@@ -134,14 +134,17 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 		else{
 			$this->redirect('Homepage:');
 		}
+		}
 	}
 
+	//komponenta na editace
 	public function createComponentEditForm(): Form
 	{
 		if (!$this->getUser()->isLoggedIn()) 
 		{
 			$this->error('You need to log in to create or edit posts');
 		}
+		else{
 		//pokud je autor článku umožní mu edit a delete
 		if($postId->creator_id = $this->user->id)
 		{
@@ -158,65 +161,40 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 			return $form;
 		}
 	}
+	}
 	//updatuje hodnoty po editu
 	public function editFormSucceeded(Form $form, array $values): void
 	{
 		$postId = $this->getParameter('postId');
 
 		if ($postId) {
-			$post = $this->database->table('posts')->get($postId);
+			$post = $this->postManager->findById($postId);
 			$post->update($values);
 		}
 		$this->flashMessage('Post was edited', 'success');
 		$this->redirect('show', $post->id);
 	}
 
-	//upvote karmy 
-	/* public function handleDownVote() {
-		if (!$this->getUser()->isLoggedIn()) {
-			$this->error('You need to log in to create or edit posts');
-		}
+	//Upvote karmy
+	public function handleUpvoteMe() {
 		$postId = $this->getParameter('postId');
-		$this->postManager->updateKarma(((int)$postId));
-		$this->redrawControl('click-counter');
-	} */
-
-	public function handleClickMe() {
-		$postId = $this->getParameter('postId');
-		$this->postManager->updateKarma(((int)$postId));
+		$this->postManager->updateKarma((int)$postId, $this->getUser()->getIdentity()->getRoles()['id']);
 		$this->counterMessageUpdate();
 		$this->redrawControl('click-counter');
 	}
+	//Downvote karmy
+	public function handleDownvoteMe()
+    {
+        $postId = $this->getParameter('postId');
+        $this->postManager->downvoteKarma((int)$postId, $this->getUser()->getIdentity()->getRoles()['id']);
+        $this->counterMessageUpdate();
+        $this->redrawControl('click-counter');
+	}
+	//překreslí karmu
 	private function counterMessageUpdate() {
 		$postId = $this->getParameter('postId');
 		$this->counterMessage = ($this->postManager->findByWhere('id', ((int)$postId))->karma);
 	}
-
-	public function handleChangeVariable()
-    {
-		$this->clickCounter = 'pokus';
-        if ($this->isAjax()) {
-            $this->redrawControl('pokus');
-        }
-    }
-	/*public function createComponentKarmaDownForm(): Form 
-	{
-		if (!$this->getUser()->isLoggedIn()) {
-			$this->error('You need to log in to create or edit posts');
-		}
-		$form = new Form;
-		$form->addSubmit('send', 'Downvote');
-		$form->onSuccess[] = [$this, 'handleDownVote'];
-
-		return $form;
-	}
-
-	 public function KarmaUpFormSucceeded(): void
-	{
-		$postId = $this->getParameter('postId');
-		$this->postManager->updateKarma(((int)$postId));
-		$this->redrawControl('click-counter');
-	} */
 	
 	//Vytvoří post
 	protected function createComponentPostForm(): Form
@@ -238,7 +216,7 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 		return $form;
 	}
 
-	//vyhodí error HTTP HEADER
+	
 	public function postFormSucceeded(Form $form, array $values): void
 	{
 		$postId = $this->getParameter('postId');
@@ -247,7 +225,6 @@ final class PostPresenter extends Nette\Application\UI\Presenter
 			$post = $this->postManager->findByWhere('id', (int)$postId);
 			$this->postManager->update($values, (int)$postId);
 		} else {
-		//	$post = $this->database->table('posts')->insert($values);
 			$this->postManager->insert($values, $this->getUser()->getIdentity()->getRoles()['id']);
 		}
 
