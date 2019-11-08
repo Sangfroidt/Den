@@ -1,0 +1,20 @@
+parameters:
+
+
+application:
+	errorPresenter: Error
+	mapping:
+		*: App\*Module\Presenters\*Presenter
+
+
+session:
+	expiration: 14 days
+
+
+services:
+	router: App\Router\RouterFactory::createRouter
+	- App\Model\PostManager
+	- App\Model\UserManager
+	- App\Forms\FormFactory
+	- App\Forms\SignUpFormFactory
+	- App\Forms\SignInFormFactory
